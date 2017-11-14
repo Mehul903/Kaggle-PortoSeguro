@@ -1,0 +1,286 @@
+---
+title: "Kaggle Project"
+author: "Mehul Patel"
+date: "November 3, 2017"
+output: html_document
+---
+
+### In this competition, you will predict the probability that an auto insurance policy holder files a claim. In the train and test data, features that belong to similar groupings are tagged as such in the feature names (e.g., ind, reg, car, calc). In addition, feature names include the postfix bin to indicate binary features and cat to indicate categorical features. Features without these designations are either continuous or ordinal. Values of -1 indicate that the feature was missing from the observation. The target columns signifies whether or not a claim was filed for that policy holder.
+
+
+```{r Packages and Data}
+
+library(caret)  ## For ConfusionMatrix
+library(e1071, quietly = T)  ## For NaiveBayes
+library(dplyr, quietly = T)  ## For data manipulation and cleaning
+library(reshape2, quietly = T)  ## Reshaping data frames and then use it for plotting 
+library(ggplot2, quietly = T)  ## Plotting the data
+library(stringr, quietly = T) ## Data cleaning and string manipulaitons
+ 
+# train <- read.csv('C:\\Users\\mpatel\\Documents\\MP_Personal\\7275_DataMining\\Project\\Kaggle_Data\\train.csv', nrows = 100000)
+
+train <- read.csv('C:\\Users\\mpatel\\Documents\\MP_Personal\\7275_DataMining\\Project\\Kaggle_Data\\train.csv')
+
+glimpse(train)
+
+```
+
+
+> Plotting Data: Distribution of target variable seems highly skewed. Only ~3.7% of total observations seem to have positive response.
+
+
+```{r EDA-1: Distribution of target variable}
+
+table(train$target)
+ggplot(data = train, aes(x = factor(target))) + 
+  geom_bar(stat = 'count', aes(y = (..count..)/sum(..count..), fill = factor(target))) +
+  geom_text(aes(y = (..count..)/sum(..count..), 
+                label = scales::percent((..count..)/sum(..count..))), 
+            stat = 'count', vjust = -0.5) +
+  labs(y = '%of total observations', x = 'Target', title = 'Distribution of target')
+
+```
+
+
+```{r Feature Engineering-1: Convert categorical and binary to factor}
+
+## Feature Engineering: Converting '*_cat' and '*_bin' variables into factor:
+
+## Getting column names of binary and categorical variables:
+cat_bin_cols <- train %>%
+                select(contains('cat'), contains('bin')) %>%
+                colnames()
+train[cat_bin_cols] <- lapply(train[cat_bin_cols], factor)
+glimpse(train)
+
+## Getting column names of continuous variables:
+oth_col_vec <- colnames(train) %>% 
+               setdiff(cat_bin_cols)
+train_cont_df <- train[oth_col_vec]
+
+
+```
+
+
+```{r EDA-2: Distribution of factor variables}
+
+## Creating three small dataframes with 10-11 categorical variables to check their distributions: 
+train_cat_1 <- train[cat_bin_cols[1:10]] %>% 
+  mutate(target = train$target)
+target_3 <- factor(melt(train_cat_1, id.vars = 'target')$target)
+ggplot(data = melt(train_cat_1, id.vars = 'target'), aes(x = value)) + 
+  geom_bar(aes(fill = target_3)) +
+  facet_wrap(~variable, scales = 'free_x', nrow = 3, ncol = 4)
+rm(train_cat_1)
+
+
+train_cat_2 <- train[cat_bin_cols[11:20]] %>%
+  mutate(target = train$target)
+target_4 <- factor(melt(train_cat_2, id.vars = 'target')$target)
+ggplot(data = melt(train_cat_2, id.vars = 'target'), aes(x = value)) + 
+  geom_bar(aes(fill = target_4)) +
+  facet_wrap(~variable, scales = 'free_x') 
+rm(train_cat_2)
+
+
+train_cat_3 <- train[cat_bin_cols[21:length(cat_bin_cols)]] %>% 
+  mutate(target = train$target)
+target_5 <- factor(melt(train_cat_3, id.vars = 'target')$target)
+ggplot(data = melt(train_cat_3, id.vars = 'target'), aes(x = value)) + 
+  geom_bar(aes(fill = target_5)) +
+  facet_wrap(~variable, scales = 'free_x') 
+rm(train_cat_3)
+
+
+```
+
+
+```{r EDA-3: Heatmap for continuous variables}
+
+## Heatmap of correlation:
+train_cont_cor <- round(cor(train_cont_df), 2) %>%
+                melt()
+
+ggplot(train_cont_cor, aes(x = Var1, y = Var2, fill = value)) + 
+  geom_tile() + 
+  # scale_fill_gradient(low = 'white', high = 'black') +
+  geom_text(aes(label = value)) + 
+  ggtitle('Heatmap of correlation: \n 28 Predictor variables') +
+  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, hjust = 1))
+  # theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r EDA-4: Histograms for continuous variables}
+
+## Checking distribution of continuous variables:
+ggplot(data = melt(train_cont_df[,3:dim(train_cont_df)[2]]), mapping = aes(x = value)) + 
+  geom_histogram(bins = 10) + 
+  facet_wrap(~variable, scales = 'free_x') + 
+  ggtitle('Check distribution of all the continuous variables')
+
+
+```
+
+
+```{r Find Number of missing values}
+
+## Output of this chunk gives number of missing values in each column of the dataframe:
+## In the o/p, ignore the '-1' at the end of the names of columns.
+
+get_missing <- function(x){
+  groups <- table(x)
+  count <- groups[names(groups) == '-1']
+  return (count)
+}
+
+missing_vals <- sapply(train,  FUN = get_missing)
+unlist(missing_vals)
+
+```
+
+
+```{r Distribution of features having missing values}
+
+## Checking distributions of variables which have missing values:
+# temp <- names(missing_vals)
+cols <- names(unlist(missing_vals))
+
+modify_col_names <- function(x){
+  sub_cols <- character()
+  for (i in cols){
+    temp_col <- unlist(str_split(i, pattern = '\\.'))[1]
+    sub_cols <- append(sub_cols, temp_col)
+
+    last <- tail(unlist(str_split(string = temp_col, pattern = '_')), 1)
+    if (last == 'cat' | last == 'bin'){
+      print (temp_col)
+      show(prop.table(table(train[temp_col])))
+    }
+  }
+}
+
+modify_col_names(cols)
+
+
+```
+
+
+```{r Dealing with missing values: Naive rule for factors andd mean based insertion for continuos vars}
+
+## Dealing with missing values of categorical and binary variables:
+## Remove columns : ps_car_03_cat, ps_car_05_cat
+## ps_car_03_cat has about 69% missing values and  ps_car_05_cat has about 44% missing values. So for now, I am removing those columns and decide later on how to deal with them.
+
+## For the remaining of the factor columns (i.e. categorical and binary variables), I'll use the naive rule to impute missing values. That is, I'll replace the missing values by the most prevalent category for that particular column.
+
+train <- train[,-c(26, 28)]  ## Remove above mentioned two columns
+
+train$ps_ind_02_cat[train$ps_ind_02_cat == -1] <- 1
+prop.table(table(train$ps_ind_02_cat))
+
+train$ps_ind_04_cat[train$ps_ind_04_cat == -1] <- 0
+prop.table(table(train$ps_ind_04_cat))
+
+train$ps_ind_05_cat[train$ps_ind_05_cat == -1] <- 0
+prop.table(table(train$ps_ind_05_cat))
+
+train$ps_car_01_cat[train$ps_car_01_cat == -1] <- 11
+prop.table(table(train$ps_car_01_cat))
+
+train$ps_car_02_cat[train$ps_car_02_cat == -1] <- 1
+prop.table(table(train$ps_car_02_cat))
+
+train$ps_car_07_cat[train$ps_car_07_cat == -1] <- 1
+prop.table(table(train$ps_car_07_cat))
+
+train$ps_car_09_cat[train$ps_car_09_cat == -1] <- 2
+prop.table(table(train$ps_car_09_cat))
+
+
+## Dealing with missing values of continuous or numeric variables:
+## Numeric columns: ps_car_11 and pa_car_12 have very less number of missing values, 5 and -1 respectively.
+## And numeric columns: ps_reg_03 and ps_car_14 have relative large number of missing values, 107772 and 42620 respectively.
+
+## Based on summary statistics and distribution of this column, I'll replace the missing values with mean of the column.
+mean_ps_reg_03 <- filter(train, ps_reg_03 != -1) %>% 
+                  select(ps_reg_03) %>% 
+                  colMeans()
+train$ps_reg_03[train$ps_reg_03 == -1] <- mean_ps_reg_03
+
+## For this column, after removing -1, the mean and the median are almost the same. So, I'll replace -1 with mean of the column.
+mean_ps_car_14 <- filter(train, ps_car_14 != -1) %>% 
+                  select(ps_car_14) %>% 
+                  colMeans()
+train$ps_car_14[train$ps_car_14 == -1] <- mean_ps_car_14
+
+```
+
+
+```{r Fitting model-1: NaiveBayes}
+
+## Splitting data into '0' and '1', and then taking random samples to create a training set.
+train_2 <- train[-1]  ## Removing ID column
+train_2_0 <- filter(train_2, target == 0)
+train_2_1 <- filter(train_2, target == 1)
+
+set.seed(11)
+train_set <- sample_n(train_2_0, size = 15000)
+train_set <- train_2_1 %>% 
+            sample_frac(size = 0.7) %>% 
+            rbind(train_set)
+
+rm(train_2_0)  ; rm(train_2_1)
+
+## Fitting the NaiveBayes model:
+nb_1 <- naiveBayes(as.factor(target)~., data = train_set)
+class(nb_1)
+
+## Predictions will be made on the entire training set:
+pred_1 <- predict(nb_1, newdata = train_2[-1])
+confusionMatrix(as.factor(train_2$target), pred_1)
+
+```
+
+
+```{r Dealing with missing values: Median based insertion for continuous variables}
+
+## There are few outliers in some of the continuos variables. So, now I'll insert median instead of mean for the missing values of the continuous variables:
+
+med_ps_reg_03 <- filter(train_2, ps_reg_03 != -1) %>% 
+                select(ps_reg_03) %>% 
+                summarise(median = median(ps_reg_03))
+train_2$ps_reg_03[train_2$ps_reg_03 == -1] <- med_ps_reg_03
+train_2$ps_reg_03 <- as.numeric(train_2$ps_reg_03)
+
+med_ps_car_14 <- filter(train_2, ps_car_14 != -1) %>% 
+                  select(ps_car_14) %>% 
+                  summarise(median = median(ps_car_14))
+train_2$ps_car_14[train_2$ps_car_14 == -1] <- med_ps_car_14
+train_2$ps_car_14 <- as.numeric(train_2$ps_car_14)
+
+```
+
+
+```{r Fitting model-2: NaiveBayes}
+
+train_2_0 <- filter(train_2, target == 0)
+train_2_1 <- filter(train_2, target == 1)
+
+set.seed(11)
+train_set <- sample_n(train_2_0, size = 15000)
+train_set <- train_2_1 %>% 
+            sample_frac(size = 0.5) %>% 
+            rbind(train_set)
+
+rm(train_2_0)  ; rm(train_2_1)
+
+nb_2 <- naiveBayes(as.factor(target)~., data = train_set)
+class(nb_2)
+
+pred_2 <- predict(nb_2, newdata = train_2[-1])
+confusionMatrix(as.factor(train_2$target), pred_2)
+
+
+```
