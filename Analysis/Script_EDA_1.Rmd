@@ -287,12 +287,16 @@ confusionMatrix(as.factor(train_2$target), pred_2)
 
 
 
-```{r Random Forest Model}
-
+```{r Fitting Model-3: Random Forest Model with mean-based insertions}
+# 
 train_set_temp <- subset(x = train_set, select = -ps_car_11_cat)
-rf1 <- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
+# rf1 <- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
 
 train_2_temp <- subset(x = train_2, select = -ps_car_11_cat)
 rf2 <- randomForest(as.factor(target)~., data = train_set_temp, xtest = train_2_temp[-1], ytest = as.factor(train_2_temp$target))
 
+rf2
+
 ```
+
+
