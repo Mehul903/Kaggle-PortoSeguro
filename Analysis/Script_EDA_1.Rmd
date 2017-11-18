@@ -10,6 +10,7 @@ output: html_document
 
 ```{r Packages and Data}
 
+library(pROC)  ## For AUC and ROC
 library(randomForest)  ## For RandomForest Algorithm
 library(caret)  ## For ConfusionMatrix
 library(e1071, quietly = T)  ## For NaiveBayes
@@ -232,7 +233,7 @@ train_set <- train_2_1 %>%
             sample_frac(size = 0.7) %>% 
             rbind(train_set)
 
-rm(train_2_0)  ; rm(train_2_1)
+rm(train_2_0)  ; rm(train_2_1); rm(train)
 
 ## Fitting the NaiveBayes model:
 nb_1 <- naiveBayes(as.factor(target)~., data = train_set)
@@ -275,7 +276,7 @@ train_set <- train_2_1 %>%
             sample_frac(size = 0.5) %>% 
             rbind(train_set)
 
-rm(train_2_0)  ; rm(train_2_1)
+rm(train_2_0); rm(train_2_1)
 
 nb_2 <- naiveBayes(as.factor(target)~., data = train_set)
 class(nb_2)
@@ -286,17 +287,51 @@ confusionMatrix(as.factor(train_2$target), pred_2)
 ```
 
 
-
 ```{r Fitting Model-3: Random Forest Model with mean-based insertions}
 # 
 train_set_temp <- subset(x = train_set, select = -ps_car_11_cat)
 # rf1 <- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
 
+## Remove this columns temporarily as it has more than 53 categories. Current implementation of RandomForest cannot handle more than 53 categories.
 train_2_temp <- subset(x = train_2, select = -ps_car_11_cat)
-rf2 <- randomForest(as.factor(target)~., data = train_set_temp, xtest = train_2_temp[-1], ytest = as.factor(train_2_temp$target))
 
-rf2
+
+rf3 <- randomForest(as.factor(target)~., data = train_set_temp, keep.forest = TRUE)
+predicted_class <- predict(rf3, newdata = train_2_temp[-1])
+predicted_prob <- predict(rf3, newdata = train_2_temp[-1], type = 'prob')
+
+confusionMatrix(data = predicted_class, reference = train_2_temp$target)
+
+AUC <- auc(train_2_temp$target, predicted_prob[,2])
+AUC
+
+plot(roc(train_2_temp$target, predicted_prob[,2]))
+
+plot(rf3, main = 'Check reduction in error with respect to #trees')
+
+varImpPlot(rf3, sort = T, n.var = 55, main = 'Variable Importance Plot')
+
+
+## From the following line plot, we can see that the class-0 has highest rate of misclassifications. Also, the class-1 (which is of primary interest) has relatively low rate of misclassification.
+error_matrix <- as.data.frame(rf3$err.rate)
+oob_error <- rf3$err.rate[,1]
+class_0_error <- rf3$err.rate[,2]
+class_1_error <- rf3$err.rate[,3]
+
+ggplot(error_matrix, aes(x = as.numeric(rownames(error_matrix)))) +
+  geom_line(aes(y = error_matrix[,c('OOB')])) + 
+  geom_line(aes(y = error_matrix[,c('0')])) +
+  geom_line(aes(y = error_matrix[,c('1')])) +
+  labs(title = 'Comparison of error rates', x = 'Number of trees in the model', 
+       y = 'Classification Error') + 
+  scale_colour_manual(values = c('red', 'blue', 'green'))  
+
 
 ```
 
 
+
+> 'ind' : Individual or Driver level feature
+> 'car' : Car related feature
+> 'reg' : Region related feature
+> 'calc': Calculated feature
