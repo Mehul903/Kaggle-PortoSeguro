@@ -10,6 +10,7 @@ output: html_document
 
 ```{r Packages and Data}
 
+library(randomForest)  ## For RandomForest Algorithm
 library(caret)  ## For ConfusionMatrix
 library(e1071, quietly = T)  ## For NaiveBayes
 library(dplyr, quietly = T)  ## For data manipulation and cleaning
@@ -218,7 +219,7 @@ train$ps_car_14[train$ps_car_14 == -1] <- mean_ps_car_14
 ```
 
 
-```{r Fitting model-1: NaiveBayes}
+```{r Fitting model-1: NaiveBayes with mean-based insertion}
 
 ## Splitting data into '0' and '1', and then taking random samples to create a training set.
 train_2 <- train[-1]  ## Removing ID column
@@ -263,7 +264,7 @@ train_2$ps_car_14 <- as.numeric(train_2$ps_car_14)
 ```
 
 
-```{r Fitting model-2: NaiveBayes}
+```{r Fitting model-2: NaiveBayes with median-based insertion}
 
 train_2_0 <- filter(train_2, target == 0)
 train_2_1 <- filter(train_2, target == 1)
@@ -282,5 +283,16 @@ class(nb_2)
 pred_2 <- predict(nb_2, newdata = train_2[-1])
 confusionMatrix(as.factor(train_2$target), pred_2)
 
+```
+
+
+
+```{r Random Forest Model}
+
+train_set_temp <- subset(x = train_set, select = -ps_car_11_cat)
+rf1 <- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
+
+train_2_temp <- subset(x = train_2, select = -ps_car_11_cat)
+rf2 <- randomForest(as.factor(target)~., data = train_set_temp, xtest = train_2_temp[-1], ytest = as.factor(train_2_temp$target))
 
 ```
