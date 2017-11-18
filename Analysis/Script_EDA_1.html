@@ -125,17 +125,29 @@ $(document).ready(function () {
 
 <div id="in-this-competition-you-will-predict-the-probability-that-an-auto-insurance-policy-holder-files-a-claim.-in-the-train-and-test-data-features-that-belong-to-similar-groupings-are-tagged-as-such-in-the-feature-names-e.g.-ind-reg-car-calc.-in-addition-feature-names-include-the-postfix-bin-to-indicate-binary-features-and-cat-to-indicate-categorical-features.-features-without-these-designations-are-either-continuous-or-ordinal.-values-of--1-indicate-that-the-feature-was-missing-from-the-observation.-the-target-columns-signifies-whether-or-not-a-claim-was-filed-for-that-policy-holder." class="section level3">
 <h3>In this competition, you will predict the probability that an auto insurance policy holder files a claim. In the train and test data, features that belong to similar groupings are tagged as such in the feature names (e.g., ind, reg, car, calc). In addition, feature names include the postfix bin to indicate binary features and cat to indicate categorical features. Features without these designations are either continuous or ordinal. Values of -1 indicate that the feature was missing from the observation. The target columns signifies whether or not a claim was filed for that policy holder.</h3>
+<pre class="r"><code>library(randomForest)  ## For RandomForest Algorithm</code></pre>
+<pre><code>## Warning: package 'randomForest' was built under R version 3.4.2</code></pre>
+<pre><code>## randomForest 4.6-12</code></pre>
+<pre><code>## Type rfNews() to see new features/changes/bug fixes.</code></pre>
 <pre class="r"><code>library(caret)  ## For ConfusionMatrix</code></pre>
 <pre><code>## Warning: package 'caret' was built under R version 3.4.2</code></pre>
 <pre><code>## Loading required package: lattice</code></pre>
 <pre><code>## Loading required package: ggplot2</code></pre>
 <pre><code>## Warning: package 'ggplot2' was built under R version 3.4.1</code></pre>
+<pre><code>## 
+## Attaching package: 'ggplot2'</code></pre>
+<pre><code>## The following object is masked from 'package:randomForest':
+## 
+##     margin</code></pre>
 <pre class="r"><code>library(e1071, quietly = T)  ## For NaiveBayes</code></pre>
 <pre><code>## Warning: package 'e1071' was built under R version 3.4.2</code></pre>
 <pre class="r"><code>library(dplyr, quietly = T)  ## For data manipulation and cleaning</code></pre>
 <pre><code>## Warning: package 'dplyr' was built under R version 3.4.2</code></pre>
 <pre><code>## 
 ## Attaching package: 'dplyr'</code></pre>
+<pre><code>## The following object is masked from 'package:randomForest':
+## 
+##     combine</code></pre>
 <pre><code>## The following objects are masked from 'package:stats':
 ## 
 ##     filter, lag</code></pre>
@@ -604,6 +616,31 @@ confusionMatrix(as.factor(train_2$target), pred_2)</code></pre>
 ##                                           
 ##        'Positive' Class : 0               
 ## </code></pre>
+<pre class="r"><code># 
+train_set_temp &lt;- subset(x = train_set, select = -ps_car_11_cat)
+# rf1 &lt;- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
+
+train_2_temp &lt;- subset(x = train_2, select = -ps_car_11_cat)
+rf2 &lt;- randomForest(as.factor(target)~., data = train_set_temp, xtest = train_2_temp[-1], ytest = as.factor(train_2_temp$target))
+
+rf2</code></pre>
+<pre><code>## 
+## Call:
+##  randomForest(formula = as.factor(target) ~ ., data = train_set_temp,      xtest = train_2_temp[-1], ytest = as.factor(train_2_temp$target)) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 7
+## 
+##         OOB estimate of  error rate: 39%
+## Confusion matrix:
+##       0    1 class.error
+## 0 11857 3143   0.2095333
+## 1  6937 3910   0.6395317
+##                 Test set error rate: 19.83%
+## Confusion matrix:
+##        0      1 class.error
+## 0 462493 111025   0.1935859
+## 1   7031  14663   0.3240988</code></pre>
 </div>
 
 
