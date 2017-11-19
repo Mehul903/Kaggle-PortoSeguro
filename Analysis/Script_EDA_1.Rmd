@@ -221,7 +221,7 @@ Numeric columns: ps_car_11 and ps_car_12 have very less number of missing values
 > Based on summary statistics and distribution of this column, I'll replace the missing values with mean of the column.
 
 
-```{r  Dealing with missing values: Mean based insertion for continuous vars}
+```{r  Dealing with missing values-1: Mean based insertion for continuous vars}
 
 ## For mean based insertions, I remove the -1 from the columns and then find the mean. Otherwise -1 will decrease the value of the mean.
 summary(train$ps_reg_03)
@@ -252,7 +252,14 @@ train$ps_car_12[train$ps_car_12 == -1] <- mean_ps_car_12
 ```
 
 
-```{r Fitting model-1: NaiveBayes with mean-based insertion}
+> At the beginning of the script - in the very first plot, we saw that target is disproportionately distributed. So, if we don't provide enough of two classes of target to the model, then model may not be able to learn the characteristics of either of the classes, and may end up with poor overall performance.
+
+> To remedy this, we'll oversample the 'rare occurrences' of the target in the training set, and that is occurrences of class-1. However, while making predictions, we'll use entire training set in which the distribution of target will be disproportionate.
+
+> Size of the training set will be ~30k, and split will be 60:40<-->class_0:class_1
+
+
+```{r Preparing the training data}
 
 ## Splitting data into '0' and '1', and then taking random samples to create a training set.
 train_2 <- train[-1]  ## Removing ID column
@@ -260,12 +267,17 @@ train_2_0 <- filter(train_2, target == 0)
 train_2_1 <- filter(train_2, target == 1)
 
 set.seed(11)
-train_set <- sample_n(train_2_0, size = 15000)
+train_set <- sample_n(train_2_0, size = 18000)
 train_set <- train_2_1 %>% 
-            sample_frac(size = 0.7) %>% 
+            sample_frac(size = 0.55) %>% 
             rbind(train_set)
 
 rm(train_2_0)  ; rm(train_2_1); rm(train)
+
+```
+
+
+```{r Fitting model-1: NaiveBayes with mean-based insertion}
 
 ## Fitting the NaiveBayes model:
 nb_1 <- naiveBayes(as.factor(target)~., data = train_set)
@@ -278,7 +290,7 @@ confusionMatrix(as.factor(train_2$target), pred_1)
 ```
 
 
-```{r Dealing with missing values: Median based insertion for continuous variables}
+```{r Dealing with missing values-2: Median based insertion for continuous variables}
 
 ## There are few outliers in some of the continuos variables. So, now I'll insert median, instead of mean, for the missing values of the continuous variables:
 
@@ -303,9 +315,9 @@ train_2_0 <- filter(train_2, target == 0)
 train_2_1 <- filter(train_2, target == 1)
 
 set.seed(11)
-train_set <- sample_n(train_2_0, size = 15000)
+train_set <- sample_n(train_2_0, size = 18000)
 train_set <- train_2_1 %>% 
-            sample_frac(size = 0.5) %>% 
+            sample_frac(size = 0.55) %>% 
             rbind(train_set)
 
 rm(train_2_0); rm(train_2_1)
@@ -321,14 +333,15 @@ confusionMatrix(as.factor(train_2$target), pred_2)
 
 > From the confusion matrix, we see that mean based insertions and median based insertions produce almost the same results.
 
-> NaiveBayes does not produce good results even on the training set. In this data, one of the classes, that is 1, is more important than the other class. So, checking the performance of the model using accuracy is not the best idea. 
+> NaiveBayes does not produce good results even on the training set. In this data, one of the classes, that is class-1, is more important than the other class. So, evaluating the performance of the model using accuracy is not the best idea. 
 
-> To identify 1s more, the specificity of the model needs to be very high. And 
+> To identify class-1 more, the specificity of the model needs to be very high.
 
 > Now, we'll test how RandomForest algorithm works with this data.
 
 ```{r Fitting Model-3: Random Forest Model with mean-based insertions}
-# 
+
+set.seed(101)
 train_set_temp <- subset(x = train_set, select = -ps_car_11_cat)
 # rf1 <- randomForest(as.factor(target)~., data = train_set_temp, mtry = 5)
 
@@ -342,7 +355,7 @@ predicted_prob <- predict(rf3, newdata = train_2_temp[-1], type = 'prob')
 
 confusionMatrix(data = predicted_class, reference = train_2_temp$target)
 
-AUC <- auc(train_2_temp$target, predicted_prob[,2])
+AUC <- auc(response = train_2_temp$target, predictor = predicted_prob[,2])
 AUC
 
 plot(roc(train_2_temp$target, predicted_prob[,2]))
@@ -369,6 +382,9 @@ ggplot(error_matrix, aes(x = as.numeric(rownames(error_matrix)))) +
 
 ```
 
+
+
+> From the variable importance plot, we can observe that none of the binary features plays an important role in improving model's predeictive performace. Some of the calculated and car related features seem very important for model's performance.
 
 
 > 'ind' : Individual or Driver level feature
