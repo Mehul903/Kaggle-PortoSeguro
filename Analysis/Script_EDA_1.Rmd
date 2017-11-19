@@ -28,7 +28,7 @@ glimpse(train)
 ```
 
 
-> Plotting Data: Distribution of target variable seems highly skewed. Only ~3.7% of total observations seem to have positive response.
+> Plotting Data: Distribution of target variable seems highly skewed. Only ~3.6% of total observations seem to have positive response.
 
 
 ```{r EDA-1: Distribution of target variable}
@@ -64,9 +64,11 @@ train_cont_df <- train[oth_col_vec]
 ```
 
 
+> Creating three small dataframes with 10-11 categorical variables to check their distributions. This visuals will also help in determining how the missing values should be treated.
+
 ```{r EDA-2: Distribution of factor variables}
 
-## Creating three small dataframes with 10-11 categorical variables to check their distributions: 
+ 
 train_cat_1 <- train[cat_bin_cols[1:10]] %>% 
   mutate(target = train$target)
 target_3 <- factor(melt(train_cat_1, id.vars = 'target')$target)
@@ -97,6 +99,10 @@ rm(train_cat_3)
 ```
 
 
+> Following heatmap will help help us in understading the correlation among various continuous variables. 
+
+> There is a couple of 'car' and 'region' related variables which seem to have strong-positive correlation but for now I'll keep them as they are.
+
 ```{r EDA-3: Heatmap for continuous variables}
 
 ## Heatmap of correlation:
@@ -114,6 +120,8 @@ ggplot(train_cont_cor, aes(x = Var1, y = Var2, fill = value)) +
 ```
 
 
+> Following histograms of continuous variables help us in understanding how continuous variables are distributed, and that can be utilized while dealing with missing values.
+
 ```{r EDA-4: Histograms for continuous variables}
 
 ## Checking distribution of continuous variables:
@@ -126,10 +134,12 @@ ggplot(data = melt(train_cont_df[,3:dim(train_cont_df)[2]]), mapping = aes(x = v
 ```
 
 
-```{r Find Number of missing values}
+> Output of following chunk gives number of missing values in each column of the training dataframe. In the o/p, ignore the '-1' at the end of the names of columns.
 
-## Output of this chunk gives number of missing values in each column of the dataframe:
-## In the o/p, ignore the '-1' at the end of the names of columns.
+> There are total of 13 variables which have missing values. Out of them, 4 are continuous and remaining are categorical. We don't have any binary feature whihc has missing values.
+
+
+```{r Find Number of missing values}
 
 get_missing <- function(x){
   groups <- table(x)
@@ -143,10 +153,13 @@ unlist(missing_vals)
 ```
 
 
+> Checking proportions of various categories in categorical variables which have missing values.
+
+> Feature 'ps_car_03_cat' and 'ps_car_05_cat' have ~69% and ~45% missing values which is not good! For the remaining of the features, proportion of missing values is not significant. So, we can replace the '-1' with the most frequent (or prevalent) category for those variables.
+
+
 ```{r Distribution of features having missing values}
 
-## Checking distributions of variables which have missing values:
-# temp <- names(missing_vals)
 cols <- names(unlist(missing_vals))
 
 modify_col_names <- function(x){
@@ -169,16 +182,13 @@ modify_col_names(cols)
 ```
 
 
-```{r Dealing with missing values: Naive rule for factors andd mean based insertion for continuos vars}
+```{r Dealing with missing values: Naive rule for factors}
 
-## Dealing with missing values of categorical and binary variables:
-## Remove columns : ps_car_03_cat, ps_car_05_cat
-## ps_car_03_cat has about 69% missing values and  ps_car_05_cat has about 44% missing values. So for now, I am removing those columns and decide later on how to deal with them.
 
-## For the remaining of the factor columns (i.e. categorical and binary variables), I'll use the naive rule to impute missing values. That is, I'll replace the missing values by the most prevalent category for that particular column.
+ ## Remove above mentioned two columns: 'ps_car_03_cat' and 'ps_car_05_cat'.
+train <- train[,-c(26, 28)]
 
-train <- train[,-c(26, 28)]  ## Remove above mentioned two columns
-
+## Replace -1s with the most frequent category for respective variables, that is replace -1 with mode of the column:
 train$ps_ind_02_cat[train$ps_ind_02_cat == -1] <- 1
 prop.table(table(train$ps_ind_02_cat))
 
@@ -200,22 +210,44 @@ prop.table(table(train$ps_car_07_cat))
 train$ps_car_09_cat[train$ps_car_09_cat == -1] <- 2
 prop.table(table(train$ps_car_09_cat))
 
+```
 
-## Dealing with missing values of continuous or numeric variables:
-## Numeric columns: ps_car_11 and pa_car_12 have very less number of missing values, 5 and -1 respectively.
-## And numeric columns: ps_reg_03 and ps_car_14 have relative large number of missing values, 107772 and 42620 respectively.
 
-## Based on summary statistics and distribution of this column, I'll replace the missing values with mean of the column.
+> Dealing with missing values of continuous or numeric variables:
+Numeric columns: ps_car_11 and ps_car_12 have very less number of missing values, 5 and 1 respectively.
+
+> Numeric columns: ps_reg_03 and ps_car_14 have relative large number of missing values, 107772 and 42620 respectively.
+
+> Based on summary statistics and distribution of this column, I'll replace the missing values with mean of the column.
+
+
+```{r  Dealing with missing values: Mean based insertion for continuous vars}
+
+## For mean based insertions, I remove the -1 from the columns and then find the mean. Otherwise -1 will decrease the value of the mean.
+summary(train$ps_reg_03)
+hist(train$ps_reg_03, main = 'Checking distribution of ps_reg_03')
 mean_ps_reg_03 <- filter(train, ps_reg_03 != -1) %>% 
                   select(ps_reg_03) %>% 
                   colMeans()
 train$ps_reg_03[train$ps_reg_03 == -1] <- mean_ps_reg_03
 
-## For this column, after removing -1, the mean and the median are almost the same. So, I'll replace -1 with mean of the column.
 mean_ps_car_14 <- filter(train, ps_car_14 != -1) %>% 
                   select(ps_car_14) %>% 
                   colMeans()
 train$ps_car_14[train$ps_car_14 == -1] <- mean_ps_car_14
+
+
+## Following continuous columns have very less missing values, 5 and 1 respectively:
+mean_ps_car_11 <- filter(train, ps_car_11 != -1) %>% 
+                  select(ps_car_11) %>% 
+                  colMeans()
+train$ps_car_11[train$ps_car_11 == -1] <- mean_ps_car_11
+
+mean_ps_car_12 <- filter(train, ps_car_12 != -1) %>% 
+                  select(ps_car_12) %>% 
+                  colMeans()
+train$ps_car_12[train$ps_car_12 == -1] <- mean_ps_car_12
+
 
 ```
 
@@ -248,7 +280,7 @@ confusionMatrix(as.factor(train_2$target), pred_1)
 
 ```{r Dealing with missing values: Median based insertion for continuous variables}
 
-## There are few outliers in some of the continuos variables. So, now I'll insert median instead of mean for the missing values of the continuous variables:
+## There are few outliers in some of the continuos variables. So, now I'll insert median, instead of mean, for the missing values of the continuous variables:
 
 med_ps_reg_03 <- filter(train_2, ps_reg_03 != -1) %>% 
                 select(ps_reg_03) %>% 
@@ -286,6 +318,14 @@ confusionMatrix(as.factor(train_2$target), pred_2)
 
 ```
 
+
+> From the confusion matrix, we see that mean based insertions and median based insertions produce almost the same results.
+
+> NaiveBayes does not produce good results even on the training set. In this data, one of the classes, that is 1, is more important than the other class. So, checking the performance of the model using accuracy is not the best idea. 
+
+> To identify 1s more, the specificity of the model needs to be very high. And 
+
+> Now, we'll test how RandomForest algorithm works with this data.
 
 ```{r Fitting Model-3: Random Forest Model with mean-based insertions}
 # 
@@ -335,3 +375,10 @@ ggplot(error_matrix, aes(x = as.numeric(rownames(error_matrix)))) +
 > 'car' : Car related feature
 > 'reg' : Region related feature
 > 'calc': Calculated feature
+
+
+> Write explanation of output
+> Check documentation of pROC
+> Handle variable having a lot of categories
+> Convert output into Gini Index
+> Use model on test data
