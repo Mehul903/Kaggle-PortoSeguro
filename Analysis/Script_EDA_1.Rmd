@@ -391,6 +391,32 @@ ggplot(error_matrix, aes(x = as.numeric(rownames(error_matrix)))) +
 > From the variable importance plot, we can observe that none of the binary features plays an important role in improving model's predeictive performace. Some of the calculated and car related features seem very important for model's performance.
 
 
+
+
+```{r Gini Index: WIP}
+
+normalizedGini <- function(aa, pp) {
+    Gini <- function(a, p) {
+        if (length(a) !=  length(p)) stop("Actual and Predicted need to be equal lengths!")
+        temp.df <- data.frame(actual = a, pred = p, range=c(1:length(a)))
+        temp.df <- temp.df[order(-temp.df$pred, temp.df$range),]
+        population.delta <- 1 / length(a)
+        total.losses <- sum(a)
+        null.losses <- rep(population.delta, length(a)) # Hopefully is similar to accumulatedPopulationPercentageSum
+        accum.losses <- temp.df$actual / total.losses # Hopefully is similar to accumulatedLossPercentageSum
+        gini.sum <- cumsum(accum.losses - null.losses) # Not sure if this is having the same effect or not
+        sum(gini.sum) / length(a)
+    }
+    Gini(aa,pp) / Gini(aa,aa)
+}
+
+
+normalizedGini(train_2_temp$target, predicted_class)
+
+```
+
+
+
 > 'ind' : Individual or Driver level feature
 > 'car' : Car related feature
 > 'reg' : Region related feature
@@ -398,7 +424,6 @@ ggplot(error_matrix, aes(x = as.numeric(rownames(error_matrix)))) +
 
 
 > Write explanation of output
-> Check documentation of pROC
 > Handle variable having a lot of categories
 > Convert output into Gini Index
 > Use model on test data
